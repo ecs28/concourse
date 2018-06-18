@@ -1,0 +1,38 @@
+---
+# source code origem
+resources:
+  # will be created a folder with the same name than resource
+- name: sb-sample
+  type: git
+  source:
+    uri: https://github.com/ecs28/sb-sample.git
+    branch: master
+# timer resource
+- name: hourly
+  type: time
+  source:
+    interval: 10m
+
+jobs:
+  # job name will be present into the screen
+  - name: build-gradle
+    serial: true
+    plan:
+    - get: sb-sample
+      # trigger is used to execute this build in any change made
+      trigger: true
+    - get: hourly
+      trigger: true
+    - task: build
+      config:
+        platform: linux
+        # docker image base
+        image_resource:
+          type: docker-image
+          source: {repository: pivotalservices/java-build-publish-resource}
+        inputs:
+          - name: sb-sample
+        # root folder, same name of the resource name
+        run:
+          path: sb-sample/build_gradle.sh
+          # args: ['']
