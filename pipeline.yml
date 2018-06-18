@@ -12,7 +12,6 @@ resources:
   type: time
   source:
     interval: 60m
-
 jobs:
   # job name will be present into the screen
   - name: build-gradle
@@ -33,7 +32,7 @@ jobs:
         inputs:
           - name: sb-sample
         outputs:
-          - name: build
+          - name: dist
         # root folder, same name of the resource name
         run:
           path: sb-sample/build_gradle.sh
@@ -42,10 +41,10 @@ jobs:
         platform: linux
         image_resource:
           type: docker-image
-          source: {repository: busybox}
+          source: {repository: pivotalservices/java-build-publish-resource}
         inputs:
           - name: sb-sample
-          - name: build
+          - name: dist
         run:
           path: sb-sample/show_files.sh
           #args: [' -ltra ']
