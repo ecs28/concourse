@@ -1,0 +1,111 @@
+---
+resource_types:
+- name: slack-notification
+  type: docker-image
+  source:
+    repository: cfcommunity/slack-notification-resource
+    tag: latest
+
+# source code origem
+resources:
+  # will be created a folder with the same name than resource
+- name: sb-sample
+  type: git
+  source:
+    uri: https://github.com/ecs28/sb-sample.git
+    branch: master
+# timer resource
+- name: hourly
+  type: time
+  source:
+    interval: 60m
+# declare notification as a resource
+- name: slack-alert
+  type: slack-notification
+  source:
+    url: https://hooks.slack.com/services/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
+
+# pcf
+- name: deploy-pcf
+  type: cf
+  source:
+    api: https://api.run.pivotal.io
+    username: eduardocsanto@gmail.com
+    password: {{password}}
+    organization: eduardocs28-org
+    space: development
+    skip_cert_check: true
+
+jobs:
+  # job name will be present into the screen
+  - name: build-gradle
+    serial: true
+    plan:
+      # resources required
+    - get: sb-sample
+      # trigger is used to execute this build in any change made
+      trigger: true
+    - get: hourly
+      trigger: true
+
+    - task: build
+      config:
+        platform: linux
+        # docker image base, pivotal for java
+        image_resource:
+          type: docker-image
+          source: {repository: pivotalservices/java-build-publish-resource}
+        inputs:
+          - name: sb-sample
+        # custom output folder to be used by the next task
+        outputs:
+          - name: dist
+        # root folder, same name of the resource name
+        run:
+          path: sb-sample/build_gradle.sh
+
+    - task: show-jar-built
+      config:
+        platform: linux
+        image_resource:
+          type: docker-image
+          source: {repository: pivotalservices/java-build-publish-resource}
+        inputs:
+          - name: sb-sample
+          - name: dist
+        run:
+          path: sb-sample/show_files.sh
+          #args: [' -ltra ']
+    - put: deploy-pcf
+      params:
+        manifest: dist/manifest.yml
+      # put notification as a task to be linked executed by this job
+    - put: slack-alert
+      params:
+          # channel where it will be delivered
+          channel: '#general'
+          #text_file: results/message.txt
+          icon_url: https://slack-files2.s3-us-west-2.amazonaws.com/bot_icons/2018-06-19/383801439524_48.png
+          # Message itself, using concourse env variables
+          text: |
+            The build works. Check it out at:
+            http://127.0.0.1:8080/teams/$BUILD_TEAM_NAME/pipelines/$BUILD_PIPELINE_NAME/jobs/$BUILD_JOB_NAME/builds/$BUILD_NAME
+            or at:
+            http://127.0.0.1:8080/builds/$BUILD_ID
+          #Result: $TEXT_FILE_CONTENT
+
+    # For failure cases
+    on_failure:
+      put: slack-alert
+      params:
+        # channel where it will be delivered
+        channel: '#general'
+        #text_file: results/message.txt
+        icon_url: https://thumbs.dreamstime.com/b/empty-pint-glass-12851789.jpg
+        # Message itself, using concourse env variables
+        text: |
+          The build is broken. Check it out at:
+          http://127.0.0.1:8080/teams/$BUILD_TEAM_NAME/pipelines/$BUILD_PIPELINE_NAME/jobs/$BUILD_JOB_NAME/builds/$BUILD_NAME
+          or at:
+          http://127.0.0.1:8080/builds/$BUILD_ID
+        #Result: $TEXT_FILE_CONTENT
